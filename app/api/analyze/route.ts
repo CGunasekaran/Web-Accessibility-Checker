@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       try {
         await page.goto(url, strategy);
         navigationSuccess = true;
-        await page.waitForTimeout(1500);
+        await new Promise((resolve) => setTimeout(resolve, 1500));
         break;
       } catch (navError) {
         console.log(

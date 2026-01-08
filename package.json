@@ -19,8 +19,6 @@
     "jsdom": "^27.4.0",
     "monaco-editor": "^0.55.1",
     "next": "16.1.1",
-    "playwright-aws-lambda": "^0.11.0",
-    "playwright-core": "^1.57.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-split-pane": "^3.0.2"

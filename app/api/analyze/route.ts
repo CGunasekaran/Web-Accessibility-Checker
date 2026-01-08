@@ -23,12 +23,24 @@ export async function POST(request: NextRequest) {
     let puppeteer;
 
     if (isProduction) {
-      // Import puppeteer-core and chromium-min for serverless (no brotli extraction needed)
+      // Import puppeteer-core and chromium-min for serverless
       const puppeteerCore = await import("puppeteer-core");
       const chromiumModule = await import("@sparticuz/chromium-min");
       const chromium = chromiumModule.default;
 
       puppeteer = puppeteerCore.default;
+
+      // Get executable path with fallback
+      let executablePath;
+      try {
+        executablePath = await chromium.executablePath(
+          'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'
+        );
+      } catch (error) {
+        console.error('Failed to get chromium executable:', error);
+        // Fallback to system Chrome if available
+        executablePath = '/usr/bin/chromium-browser';
+      }
 
       launchOptions = {
         args: [
@@ -39,8 +51,9 @@ export async function POST(request: NextRequest) {
           "--disable-dev-shm-usage",
           "--disable-gpu",
           "--single-process",
+          "--no-zygote",
         ],
-        executablePath: await chromium.executablePath(),
+        executablePath,
         headless: true,
       };
     } else {

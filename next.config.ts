@@ -1,10 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  experimental: {
-    serverComponentsExternalPackages: ["jsdom"],
-  },
+  serverExternalPackages: ["jsdom"],
 };
 
 export default nextConfig;

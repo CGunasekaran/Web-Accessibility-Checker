@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -18,21 +16,41 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine if running locally or in production
-    const isProduction = process.env.VERCEL === "1" || process.env.AWS_LAMBDA_FUNCTION_NAME;
-    
+    const isProduction =
+      process.env.VERCEL === "1" || process.env.AWS_LAMBDA_FUNCTION_NAME;
+
     let launchOptions;
-    
+    let puppeteer;
+
     if (isProduction) {
-      // Configure chromium for serverless
-      chromium.setGraphicsMode = false;
+      // Import puppeteer-core and chromium for serverless
+      const puppeteerCore = await import("puppeteer-core");
+      const chromiumModule = await import("@sparticuz/chromium");
+      const chromium = chromiumModule.default;
       
+      puppeteer = puppeteerCore.default;
+
+      // Optimize for serverless
+      if (typeof chromium.setGraphicsMode !== 'undefined') {
+        chromium.setGraphicsMode = false;
+      }
+
       launchOptions = {
-        args: [...chromium.args, "--disable-http2"],
+        args: [
+          ...chromium.args,
+          "--disable-http2",
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+        ],
         executablePath: await chromium.executablePath(),
         headless: true,
       };
     } else {
-      // Local development
+      // Import regular puppeteer for local development (includes Chrome)
+      const puppeteerModule = await import("puppeteer");
+      puppeteer = puppeteerModule.default;
+
       launchOptions = {
         args: [
           "--no-sandbox",
@@ -40,12 +58,6 @@ export async function POST(request: NextRequest) {
           "--disable-dev-shm-usage",
           "--disable-http2",
         ],
-        executablePath:
-          process.platform === "win32"
-            ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-            : process.platform === "darwin"
-            ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-            : "/usr/bin/google-chrome",
         headless: true,
       };
     }

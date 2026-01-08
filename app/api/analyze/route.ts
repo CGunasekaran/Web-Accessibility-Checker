@@ -1,57 +1,118 @@
 import { NextRequest, NextResponse } from "next/server";
 import puppeteer from "puppeteer";
-import { AxePuppeteer } from "@axe-core/puppeteer";
+import * as fs from "fs";
+import * as path from "path";
 
 export async function POST(request: NextRequest) {
   let browser;
   try {
     const { url } = await request.json();
 
+    // Validate URL
+    if (!url || typeof url !== "string") {
+      return NextResponse.json(
+        { error: "Invalid URL provided" },
+        { status: 400 }
+      );
+    }
+
     browser = await puppeteer.launch({
       headless: true,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-http2",
-        "--disable-features=site-per-process",
         "--disable-dev-shm-usage",
+        "--disable-http2", // Disable HTTP2 to avoid protocol errors
+        "--disable-blink-features=AutomationControlled",
       ],
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });
 
+    // Set a realistic user agent
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
+    // Try multiple navigation strategies
     let navigationSuccess = false;
+    let lastError: Error | null = null;
+
     const strategies = [
-      { waitUntil: "domcontentloaded" as const, timeout: 45000 },
-      { waitUntil: "load" as const, timeout: 45000 },
-      { waitUntil: "networkidle0" as const, timeout: 45000 },
+      { waitUntil: "domcontentloaded" as const, timeout: 25000 },
+      { waitUntil: "load" as const, timeout: 25000 },
+      { waitUntil: "networkidle0" as const, timeout: 25000 },
+      { waitUntil: "networkidle2" as const, timeout: 25000 },
     ];
 
     for (const strategy of strategies) {
       try {
+        console.log(`Trying navigation with ${strategy.waitUntil}...`);
         await page.goto(url, strategy);
         navigationSuccess = true;
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        console.log(`Successfully loaded with ${strategy.waitUntil}`);
         break;
       } catch (navError) {
-        console.log(
-          `Navigation failed with ${strategy.waitUntil}, trying next strategy...`
-        );
+        lastError = navError as Error;
+        console.log(`Failed with ${strategy.waitUntil}: ${lastError.message}`);
+        continue;
       }
     }
 
     if (!navigationSuccess) {
       throw new Error(
-        "Unable to load the page after trying multiple strategies"
+        `Failed to load URL after trying multiple strategies. Last error: ${lastError?.message}`
       );
     }
 
-    const results = await new AxePuppeteer(page).analyze();
+    // Wait for page to be ready
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Check if page has content
+    const hasContent = await page.evaluate(
+      () => document.body.innerHTML.length > 0
+    );
+    if (!hasContent) {
+      throw new Error("Page loaded but has no content");
+    }
+
+    // Load axe-core from node_modules
+    const axePath = path.join(
+      process.cwd(),
+      "node_modules",
+      "axe-core",
+      "axe.min.js"
+    );
+    const axeSource = fs.readFileSync(axePath, "utf8");
+
+    // Inject and run axe-core
+    await page.evaluate(axeSource);
+
+    // Verify axe is loaded
+    const axeLoaded = await page.evaluate(
+      () => typeof (window as any).axe !== "undefined"
+    );
+    if (!axeLoaded) {
+      throw new Error("Failed to load axe-core library");
+    }
+
+    // Run axe with iframe support disabled and error handling
+    const results = await page.evaluate(async () => {
+      try {
+        return await (window as any).axe.run(document, {
+          runOnly: {
+            type: "tag",
+            values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+          },
+          iframes: false, // Disable iframe scanning
+          resultTypes: ["violations", "passes", "incomplete"],
+        });
+      } catch (error) {
+        console.error("Axe run error:", error);
+        throw error;
+      }
+    });
 
     const violations = await Promise.all(
       results.violations.map(async (violation) => {
@@ -110,8 +171,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const errorMessage =
-      error instanceof Error ? error.message : "Failed to analyze URL";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    // Provide detailed error message
+    let errorMessage = "Failed to analyze URL";
+    let errorDetails = "";
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Check for specific error types
+      if (error.message.includes("net::ERR_")) {
+        errorDetails =
+          "Network error occurred. The website may be blocking automated access or using protocols that are not supported.";
+      } else if (error.message.includes("timeout")) {
+        errorDetails =
+          "The page took too long to load. Try again or check if the URL is accessible.";
+      } else if (error.message.includes("no content")) {
+        errorDetails = "The page loaded but appears to be empty.";
+      }
+    }
+
+    return NextResponse.json(
+      {
+        error: errorMessage,
+        details: errorDetails,
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 }
+    );
   }
 }

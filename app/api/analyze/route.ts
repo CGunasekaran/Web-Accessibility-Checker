@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
             "--disable-dev-shm-usage",
             "--disable-http2",
           ],
-      defaultViewport: chromium.defaultViewport,
       executablePath: isProduction
         ? await chromium.executablePath()
         : process.platform === "win32"

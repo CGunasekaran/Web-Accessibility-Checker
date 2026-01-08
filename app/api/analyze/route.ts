@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
 
-// Set max duration for Vercel serverless function (60s requires Pro tier)
-export const maxDuration = 60;
+// Set max duration for Vercel serverless function (10s for free Hobby tier)
+export const maxDuration = 10;
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,26 +19,46 @@ export async function POST(request: NextRequest) {
 
     console.log(`Fetching URL: ${url}`);
 
-    // Fetch the HTML content with timeout
+    // Fetch the HTML content with retry logic for slow sites
     let response;
-    try {
-      response = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-        signal: AbortSignal.timeout(45000),
-      });
-    } catch (fetchError: any) {
-      if (fetchError.name === "TimeoutError" || fetchError.code === 23) {
-        throw new Error(
-          "Request timeout: The website took too long to respond. Try again or test a different URL."
-        );
+    let lastError;
+    const maxRetries = 2;
+    const timeout = 8000; // 8 seconds to fit within 10s limit
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Attempt ${attempt}/${maxRetries}...`);
+        response = await fetch(url, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Accept:
+              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+          },
+          signal: AbortSignal.timeout(timeout),
+        });
+        break; // Success, exit retry loop
+      } catch (fetchError: any) {
+        lastError = fetchError;
+        console.log(`Attempt ${attempt} failed: ${fetchError.message}`);
+        
+        if (attempt === maxRetries) {
+          // Last attempt failed
+          if (fetchError.name === "TimeoutError" || fetchError.code === 23) {
+            throw new Error(
+              "Site timeout: This website is too slow for the free tier (10s limit). Try: 1) A faster/lighter page from the same site, 2) Test a different website, or 3) The site may be temporarily slow - try again later."
+            );
+          }
+          throw fetchError;
+        }
+        // Wait a bit before retrying
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
-      throw fetchError;
+    }
+
+    if (!response) {
+      throw lastError || new Error("Failed to fetch URL");
     }
 
     if (!response.ok) {

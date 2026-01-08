@@ -115,9 +115,9 @@ export async function POST(request: NextRequest) {
     });
 
     const violations = await Promise.all(
-      results.violations.map(async (violation) => {
+      results.violations.map(async (violation: any) => {
         const nodesWithScreenshots = await Promise.all(
-          violation.nodes.map(async (node) => {
+          violation.nodes.map(async (node: any) => {
             try {
               const selector =
                 typeof node.target[0] === "string"

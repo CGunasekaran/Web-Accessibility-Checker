@@ -1,9 +1,7 @@
 {
   "functions": {
-    "app/api/analyze/route.ts": {
-      "maxDuration": 60,
-      "memory": 3008
+    "app/api/**/*.ts": {
+      "maxDuration": 10
     }
-  },
-  "regions": ["iad1"]
+  }
 }

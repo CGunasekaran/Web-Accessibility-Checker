@@ -2,6 +2,9 @@
   "name": "accessibility-checker",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=18.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,7 +14,7 @@
   "dependencies": {
     "@axe-core/puppeteer": "^4.11.0",
     "@monaco-editor/react": "^4.7.0",
-    "@sparticuz/chromium-min": "^143.0.4",
+    "@sparticuz/chromium": "^131.0.1",
     "axe-core": "^4.11.0",
     "html2canvas": "^1.4.1",
     "monaco-editor": "^0.55.1",

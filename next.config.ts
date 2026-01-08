@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
       const existingExternals = config.externals || [];
       config.externals = [
         existingExternals,
-        "@sparticuz/chromium-min",
+        "@sparticuz/chromium",
         "puppeteer-core",
       ];
     }
@@ -15,12 +15,12 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverComponentsExternalPackages: [
-      "@sparticuz/chromium-min",
+      "@sparticuz/chromium",
       "puppeteer-core",
     ],
   },
   // Increase serverless function size limit
-  serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core"],
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
 };
 
 export default nextConfig;

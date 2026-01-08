@@ -22,57 +22,35 @@ export async function POST(request: NextRequest) {
     const isProduction =
       process.env.VERCEL === "1" || process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-    let launchOptions;
-    let puppeteer;
+    let playwright;
+    let chromium;
 
     if (isProduction) {
-      // Import puppeteer-core and chromium for serverless
-      const puppeteerCore = await import("puppeteer-core");
-      const chromiumModule = await import("@sparticuz/chromium");
-      const chromium = chromiumModule.default;
-
-      puppeteer = puppeteerCore.default;
-
-      launchOptions = {
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      };
+      // Use playwright-aws-lambda for serverless
+      const playwrightLambda = await import("playwright-aws-lambda");
+      chromium = playwrightLambda.default;
+      browser = await chromium.launchChromium({ headless: true });
     } else {
-      // Import regular puppeteer for local development (includes Chrome)
-      const puppeteerModule = await import("puppeteer");
-      puppeteer = puppeteerModule.default;
-
-      launchOptions = {
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-http2",
-        ],
+      // Use regular playwright for local development
+      const playwrightModule = await import("playwright-core");
+      playwright = playwrightModule.chromium;
+      browser = await playwright.launch({
         headless: true,
-      };
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
     }
 
-    browser = await puppeteer.launch(launchOptions);
-
     const page = await browser.newPage();
-    await page.setViewport({ width: 1920, height: 1080 });
-
-    // Set a realistic user agent
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    );
+    await page.setViewportSize({ width: 1920, height: 1080 });
 
     // Navigate with optimized timeout for serverless
     let navigationSuccess = false;
     let lastError: Error | null = null;
 
-    // Faster strategies for serverless - shorter timeouts
+    // Faster strategies for serverless
     const strategies = [
       { waitUntil: "domcontentloaded" as const, timeout: 15000 },
-      { waitUntil: "networkidle2" as const, timeout: 20000 },
+      { waitUntil: "networkidle" as const, timeout: 20000 },
       { waitUntil: "load" as const, timeout: 10000 },
     ];
 
@@ -89,7 +67,6 @@ export async function POST(request: NextRequest) {
       } catch (navError) {
         lastError = navError as Error;
         console.log(`Failed with ${strategy.waitUntil}: ${lastError.message}`);
-        // Continue to next strategy
         continue;
       }
     }
@@ -139,7 +116,7 @@ export async function POST(request: NextRequest) {
             type: "tag",
             values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
           },
-          iframes: false, // Disable iframe scanning
+          iframes: false,
           resultTypes: ["violations", "passes", "incomplete"],
         });
       } catch (error) {
@@ -157,11 +134,12 @@ export async function POST(request: NextRequest) {
                 typeof node.target[0] === "string"
                   ? node.target[0]
                   : String(node.target[0]);
-              const element = await page.$(selector);
+              const element = await page.locator(selector).first();
               let screenshot = null;
 
               if (element) {
-                screenshot = await element.screenshot({ encoding: "base64" });
+                const screenshotBuffer = await element.screenshot();
+                screenshot = screenshotBuffer.toString("base64");
               }
 
               return {

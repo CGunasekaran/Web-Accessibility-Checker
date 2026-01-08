@@ -19,9 +19,9 @@ export async function POST(request: NextRequest) {
 
     // Determine if running locally or in production
     const isProduction = process.env.NODE_ENV === "production";
-    
+
     browser = await puppeteer.launch({
-      args: isProduction 
+      args: isProduction
         ? chromium.args
         : [
             "--no-sandbox",
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         : process.platform === "darwin"
         ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         : "/usr/bin/google-chrome",
-      headless: chromium.headless,
+      headless: true,
     });
 
     const page = await browser.newPage();

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
 
-// Set max duration for Vercel serverless function (10s for Hobby tier)
-export const maxDuration = 10;
+// Set max duration for Vercel serverless function (60s requires Pro tier)
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Language": "en-US,en;q=0.9",
         },
-        signal: AbortSignal.timeout(9000),
+        signal: AbortSignal.timeout(45000),
       });
     } catch (fetchError: any) {
       if (fetchError.name === "TimeoutError" || fetchError.code === 23) {

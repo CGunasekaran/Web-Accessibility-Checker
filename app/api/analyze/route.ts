@@ -23,17 +23,12 @@ export async function POST(request: NextRequest) {
     let puppeteer;
 
     if (isProduction) {
-      // Import puppeteer-core and chromium for serverless
+      // Import puppeteer-core and chromium-min for serverless (no brotli extraction needed)
       const puppeteerCore = await import("puppeteer-core");
-      const chromiumModule = await import("@sparticuz/chromium");
+      const chromiumModule = await import("@sparticuz/chromium-min");
       const chromium = chromiumModule.default;
-      
-      puppeteer = puppeteerCore.default;
 
-      // Optimize for serverless
-      if (typeof chromium.setGraphicsMode !== 'undefined') {
-        chromium.setGraphicsMode = false;
-      }
+      puppeteer = puppeteerCore.default;
 
       launchOptions = {
         args: [
@@ -42,6 +37,8 @@ export async function POST(request: NextRequest) {
           "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--single-process",
         ],
         executablePath: await chromium.executablePath(),
         headless: true,

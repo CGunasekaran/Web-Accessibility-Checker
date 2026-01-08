@@ -18,26 +18,39 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine if running locally or in production
-    const isProduction = process.env.NODE_ENV === "production";
+    const isProduction = process.env.VERCEL === "1" || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    
+    let launchOptions;
+    
+    if (isProduction) {
+      // Configure chromium for serverless
+      chromium.setGraphicsMode = false;
+      
+      launchOptions = {
+        args: [...chromium.args, "--disable-http2"],
+        executablePath: await chromium.executablePath(),
+        headless: true,
+      };
+    } else {
+      // Local development
+      launchOptions = {
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-http2",
+        ],
+        executablePath:
+          process.platform === "win32"
+            ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+            : process.platform === "darwin"
+            ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            : "/usr/bin/google-chrome",
+        headless: true,
+      };
+    }
 
-    browser = await puppeteer.launch({
-      args: isProduction
-        ? chromium.args
-        : [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-http2",
-          ],
-      executablePath: isProduction
-        ? await chromium.executablePath()
-        : process.platform === "win32"
-        ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-        : process.platform === "darwin"
-        ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        : "/usr/bin/google-chrome",
-      headless: true,
-    });
+    browser = await puppeteer.launch(launchOptions);
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });

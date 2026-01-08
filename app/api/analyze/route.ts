@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
 
+// Set max duration for Vercel serverless function (60s for hobby/pro tier)
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   let browser;
   try {
@@ -34,12 +37,12 @@ export async function POST(request: NextRequest) {
       let executablePath;
       try {
         executablePath = await chromium.executablePath(
-          'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'
+          "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar"
         );
       } catch (error) {
-        console.error('Failed to get chromium executable:', error);
+        console.error("Failed to get chromium executable:", error);
         // Fallback to system Chrome if available
-        executablePath = '/usr/bin/chromium-browser';
+        executablePath = "/usr/bin/chromium-browser";
       }
 
       launchOptions = {
@@ -82,27 +85,31 @@ export async function POST(request: NextRequest) {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
-    // Try multiple navigation strategies
+    // Navigate with optimized timeout for serverless
     let navigationSuccess = false;
     let lastError: Error | null = null;
 
+    // Faster strategies for serverless - shorter timeouts
     const strategies = [
-      { waitUntil: "domcontentloaded" as const, timeout: 25000 },
-      { waitUntil: "load" as const, timeout: 25000 },
-      { waitUntil: "networkidle0" as const, timeout: 25000 },
-      { waitUntil: "networkidle2" as const, timeout: 25000 },
+      { waitUntil: "domcontentloaded" as const, timeout: 15000 },
+      { waitUntil: "networkidle2" as const, timeout: 20000 },
+      { waitUntil: "load" as const, timeout: 10000 },
     ];
 
     for (const strategy of strategies) {
       try {
         console.log(`Trying navigation with ${strategy.waitUntil}...`);
-        await page.goto(url, strategy);
+        await page.goto(url, {
+          waitUntil: strategy.waitUntil,
+          timeout: strategy.timeout,
+        });
         navigationSuccess = true;
         console.log(`Successfully loaded with ${strategy.waitUntil}`);
         break;
       } catch (navError) {
         lastError = navError as Error;
         console.log(`Failed with ${strategy.waitUntil}: ${lastError.message}`);
+        // Continue to next strategy
         continue;
       }
     }
@@ -113,8 +120,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Wait for page to be ready
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Brief wait for page to stabilize
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Check if page has content
     const hasContent = await page.evaluate(

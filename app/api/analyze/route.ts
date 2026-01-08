@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JSDOM } from "jsdom";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -38,6 +37,9 @@ export async function POST(request: NextRequest) {
     if (!html || html.length === 0) {
       throw new Error("Page has no content");
     }
+
+    // Dynamically import JSDOM to avoid ESM/CommonJS conflicts
+    const { JSDOM } = await import("jsdom");
 
     // Create a DOM using JSDOM
     const dom = new JSDOM(html, {

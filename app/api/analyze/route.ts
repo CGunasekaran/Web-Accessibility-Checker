@@ -70,8 +70,13 @@ async function fetchHtmlWithFallback(options: {
   const attemptUrls = [options.normalizedUrl];
 
   // If the user didn't specify a scheme, some sites only respond over http.
-  if (options.allowHttpFallback && options.normalizedUrl.startsWith("https://")) {
-    attemptUrls.push(`http://${options.normalizedUrl.slice("https://".length)}`);
+  if (
+    options.allowHttpFallback &&
+    options.normalizedUrl.startsWith("https://")
+  ) {
+    attemptUrls.push(
+      `http://${options.normalizedUrl.slice("https://".length)}`
+    );
   }
 
   let lastError: unknown;
@@ -88,7 +93,9 @@ async function fetchHtmlWithFallback(options: {
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+          throw new Error(
+            `Failed to fetch URL: ${response.status} ${response.statusText}`
+          );
         }
 
         const html = await response.text();
@@ -118,6 +125,8 @@ async function fetchHtmlWithFallback(options: {
 }
 
 export async function POST(request: NextRequest) {
+  let fetchDiagnostics: ReturnType<typeof describeFetchError> | null = null;
+
   try {
     const { url } = await request.json();
 
@@ -189,6 +198,7 @@ export async function POST(request: NextRequest) {
 
       // Improve actionable diagnostics for undici/node fetch() failures
       const info = describeFetchError(fetchError);
+      fetchDiagnostics = info;
       console.error("Fetch failed diagnostics:", info);
 
       throw fetchError;
@@ -275,7 +285,10 @@ export async function POST(request: NextRequest) {
       errorMessage = error.message;
 
       // Check for specific error types
-      if (error.message.includes("fetch") || error.message.includes("Fetch failed")) {
+      if (
+        error.message.includes("fetch") ||
+        error.message.includes("Fetch failed")
+      ) {
         errorDetails =
           "Network error occurred. The website may be blocking automated access, rejecting Railway IPs, or failing TLS/DNS. Try another page on the same site, or test with a simple URL like https://example.com to confirm the service is working.";
       } else if (error.message.includes("timeout")) {
@@ -290,6 +303,7 @@ export async function POST(request: NextRequest) {
       {
         error: errorMessage,
         details: errorDetails,
+        network: fetchDiagnostics,
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

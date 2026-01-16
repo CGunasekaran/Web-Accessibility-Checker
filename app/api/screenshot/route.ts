@@ -5,8 +5,11 @@ export async function POST(request: NextRequest) {
   try {
     const { url } = await request.json();
 
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+
     const browser = await puppeteer.launch({
       headless: true,
+      ...(executablePath ? { executablePath } : {}),
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 

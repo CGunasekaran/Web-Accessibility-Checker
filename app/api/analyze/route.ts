@@ -59,8 +59,11 @@ async function analyzeWithPuppeteer(targetUrl: string, timeoutMs: number) {
   const axeMod = await import("@axe-core/puppeteer");
   const AxePuppeteer = (axeMod as any).AxePuppeteer;
 
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+
   const browser = await puppeteer.launch({
     headless: true,
+    ...(executablePath ? { executablePath } : {}),
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
   });
 
@@ -245,7 +248,29 @@ export async function POST(request: NextRequest) {
       });
       html = result.html;
     } catch (fetchError: any) {
-      if (fetchError.name === "TimeoutError" || fetchError.code === 23) {
+      const isTimeoutError =
+        fetchError?.name === "TimeoutError" ||
+        fetchError?.code === 23 ||
+        fetchError?.cause?.code === "ETIMEDOUT";
+
+      // On Railway, fall back to a headless browser fetch/scan even on timeouts.
+      // Some sites hang or block plain server-side HTTP clients but load in Chromium.
+      if (isRailway && isTimeoutError) {
+        try {
+          const fallback = await analyzeWithPuppeteer(normalizedUrl, timeout);
+          return NextResponse.json({
+            ...fallback,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (puppeteerError) {
+          console.error(
+            "Puppeteer fallback failed:",
+            describeFetchError(puppeteerError)
+          );
+        }
+      }
+
+      if (isTimeoutError) {
         const message = isRailway
           ? "Website timeout. This site is extremely slow/unresponsive, or blocking server-side requests. Try a different page or set FETCH_TIMEOUT_MS on Railway to increase the limit."
           : "Website timeout (7s limit). This site loads too slowly for free Vercel hosting. The app is also deployed on Railway with longer timeouts - check your Railway URL.";

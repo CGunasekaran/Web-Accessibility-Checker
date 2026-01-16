@@ -1,9 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
+import { Agent, setGlobalDispatcher } from "undici";
 
 // Set max duration for Vercel serverless function (10s for free Hobby tier)
 export const maxDuration = 10;
+
+let undiciConfiguredTimeoutMs = 0;
+
+function ensureUndiciTimeouts(timeoutMs: number) {
+  // Node's fetch() is backed by undici. undici has its own body/headers timeouts
+  // (often ~30s by default) which can trigger read ETIMEDOUT even if AbortSignal.timeout()
+  // is set higher. Configure it once per runtime to match our requested timeout.
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return;
+  }
+
+  if (timeoutMs <= undiciConfiguredTimeoutMs) {
+    return;
+  }
+
+  setGlobalDispatcher(
+    new Agent({
+      headersTimeout: timeoutMs,
+      bodyTimeout: timeoutMs,
+      connectTimeout: Math.min(30_000, timeoutMs),
+    })
+  );
+
+  undiciConfiguredTimeoutMs = timeoutMs;
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -139,6 +165,9 @@ export async function POST(request: NextRequest) {
     console.log(
       `Platform: ${isRailway ? "Railway" : "Vercel"}, Timeout: ${timeout}ms`
     );
+
+    // Prevent undici's internal body/headers timeouts from firing earlier than our AbortSignal timeout.
+    ensureUndiciTimeouts(timeout);
 
     // Fetch the HTML content (with retry + http fallback when user omitted scheme)
     let html: string;

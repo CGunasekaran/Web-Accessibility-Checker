@@ -9,20 +9,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "postinstall": "patch-package"
+    "lint": "eslint"
   },
   "dependencies": {
     "@axe-core/puppeteer": "^4.11.0",
-    "@exodus/bytes": "^1.0.0",
     "@monaco-editor/react": "^4.7.0",
     "axe-core": "^4.11.0",
-    "html-encoding-sniffer": "^6.0.0",
     "html2canvas": "^1.4.1",
     "jsdom": "^20.0.3",
     "monaco-editor": "^0.55.1",
     "next": "16.1.1",
-    "patch-package": "^8.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-split-pane": "^3.0.2"

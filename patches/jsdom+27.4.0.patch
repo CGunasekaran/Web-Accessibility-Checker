@@ -1,0 +1,24 @@
+diff --git a/node_modules/jsdom/lib/api.js b/node_modules/jsdom/lib/api.js
+index e8cdf2e..65f74af 100644
+--- a/node_modules/jsdom/lib/api.js
++++ b/node_modules/jsdom/lib/api.js
+@@ -5,7 +5,8 @@ const vm = require("vm");
+ const toughCookie = require("tough-cookie");
+ const sniffHTMLEncoding = require("html-encoding-sniffer");
+ const whatwgURL = require("whatwg-url");
+-const { legacyHookDecode } = require("@exodus/bytes/encoding.js");
++let legacyHookDecode;
++let encodingModulePromise = import("@exodus/bytes/encoding.js").then(mod => { legacyHookDecode = mod.legacyHookDecode; });
+ const { URL } = require("whatwg-url");
+ const MIMEType = require("whatwg-mimetype");
+ const idlUtils = require("./jsdom/living/generated/utils.js");
+@@ -301,6 +302,9 @@ function normalizeHTML(html, mimeType) {
+       xml: mimeType.isXML(),
+       transportLayerEncodingLabel: mimeType.parameters.get("charset")
+     });
++    if (!legacyHookDecode) {
++      await encodingModulePromise;
++    }
+     html = legacyHookDecode(html, encoding);
+   } else {
+     html = String(html);

@@ -20,10 +20,13 @@ export async function POST(request: NextRequest) {
     console.log(`Fetching URL: ${url}`);
 
     // Detect platform - Railway has longer timeouts
-    const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
+    const isRailway =
+      process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
     const timeout = isRailway ? 45000 : 7000; // 45s on Railway, 7s on Vercel
 
-    console.log(`Platform: ${isRailway ? 'Railway' : 'Vercel'}, Timeout: ${timeout}ms`);
+    console.log(
+      `Platform: ${isRailway ? "Railway" : "Vercel"}, Timeout: ${timeout}ms`
+    );
 
     // Fetch the HTML content - single attempt optimized for platform
     let response;
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest) {
       });
     } catch (fetchError: any) {
       if (fetchError.name === "TimeoutError" || fetchError.code === 23) {
-        const message = isRailway 
+        const message = isRailway
           ? "Website timeout (45s). This site is extremely slow or unresponsive. Try a different page or site."
           : "Website timeout (7s limit). This site loads too slowly for free Vercel hosting. The app is also deployed on Railway with longer timeouts - check your Railway URL.";
         throw new Error(message);
@@ -71,8 +74,6 @@ export async function POST(request: NextRequest) {
 
     const { window } = dom;
 
-
-
     // Load axe-core from local lib directory for serverless compatibility
     let axeSource;
     try {
@@ -80,7 +81,9 @@ export async function POST(request: NextRequest) {
       axeSource = fs.readFileSync(axePath, "utf8");
     } catch (readError) {
       console.error("Failed to read axe.min.js from lib directory:", readError);
-      throw new Error("axe-core could not be loaded from lib/axe.min.js. Ensure the file exists and is accessible.");
+      throw new Error(
+        "axe-core could not be loaded from lib/axe.min.js. Ensure the file exists and is accessible."
+      );
     }
 
     // Inject axe-core into the window

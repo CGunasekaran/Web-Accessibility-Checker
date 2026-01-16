@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@axe-core/puppeteer": "^4.11.0",
@@ -21,7 +22,6 @@
     "jsdom": "^27.4.0",
     "monaco-editor": "^0.55.1",
     "next": "16.1.1",
-    "patch-package": "^8.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-split-pane": "^3.0.2"

@@ -65,11 +65,11 @@ export async function POST(request: NextRequest) {
     // Dynamically import JSDOM to avoid ESM/CommonJS conflicts
     const { JSDOM } = await import("jsdom");
 
-    // Create a DOM using JSDOM
+    // Create a DOM using JSDOM. Avoid loading external subresources (CSS/JS/images)
+    // to keep server-side analysis fast and stable.
     const dom = new JSDOM(html, {
       url: url,
       runScripts: "outside-only",
-      resources: "usable",
     });
 
     const { window } = dom;

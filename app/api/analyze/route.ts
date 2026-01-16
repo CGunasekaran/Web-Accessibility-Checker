@@ -5,6 +5,92 @@ import * as path from "path";
 // Set max duration for Vercel serverless function (10s for free Hobby tier)
 export const maxDuration = 10;
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function describeFetchError(err: unknown) {
+  const anyErr = err as any;
+  const name = anyErr?.name;
+  const message = anyErr?.message;
+  const code = anyErr?.code;
+  const cause = anyErr?.cause;
+  const causeCode = cause?.code;
+  const causeMessage = cause?.message;
+
+  return {
+    name,
+    message,
+    code,
+    causeCode,
+    causeMessage,
+  };
+}
+
+async function fetchHtmlWithFallback(options: {
+  originalUrl: string;
+  normalizedUrl: string;
+  timeoutMs: number;
+  allowHttpFallback: boolean;
+}) {
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+  };
+
+  const attemptUrls = [options.normalizedUrl];
+
+  // If the user didn't specify a scheme, some sites only respond over http.
+  if (options.allowHttpFallback && options.normalizedUrl.startsWith("https://")) {
+    attemptUrls.push(`http://${options.normalizedUrl.slice("https://".length)}`);
+  }
+
+  let lastError: unknown;
+
+  for (const attemptUrl of attemptUrls) {
+    // 2 attempts per URL for transient network failures
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = await fetch(attemptUrl, {
+          headers,
+          redirect: "follow",
+          cache: "no-store",
+          signal: AbortSignal.timeout(options.timeoutMs),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+        }
+
+        const html = await response.text();
+        if (!html || html.length === 0) {
+          throw new Error("Page has no content");
+        }
+
+        return { html, finalUrl: attemptUrl };
+      } catch (err) {
+        lastError = err;
+
+        // If we timed out, don't bother retrying other URLs for long.
+        const anyErr = err as any;
+        if (anyErr?.name === "TimeoutError" || anyErr?.code === 23) {
+          throw err;
+        }
+
+        // small backoff before retry
+        if (attempt === 1) {
+          await sleep(300);
+        }
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { url } = await request.json();
@@ -18,9 +104,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Normalize URL (allow users to enter without protocol)
-    const normalizedUrl = url.startsWith("http://") || url.startsWith("https://")
-      ? url
-      : `https://${url}`;
+    const userProvidedScheme =
+      url.startsWith("http://") || url.startsWith("https://");
+
+    const normalizedUrl =
+      url.startsWith("http://") || url.startsWith("https://")
+        ? url
+        : `https://${url}`;
 
     // Ensure URL is syntactically valid
     try {
@@ -43,29 +133,23 @@ export async function POST(request: NextRequest) {
     const timeout = Number.isFinite(timeoutOverride)
       ? timeoutOverride
       : isRailway
-        ? 90000
-        : 7000; // 90s on Railway by default, 7s on Vercel
+      ? 90000
+      : 7000; // 90s on Railway by default, 7s on Vercel
 
     console.log(
       `Platform: ${isRailway ? "Railway" : "Vercel"}, Timeout: ${timeout}ms`
     );
 
-    // Fetch the HTML content - single attempt optimized for platform
-    let response;
+    // Fetch the HTML content (with retry + http fallback when user omitted scheme)
+    let html: string;
     try {
-      response = await fetch(normalizedUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-          "Cache-Control": "no-cache",
-        },
-        redirect: "follow",
-        cache: "no-store",
-        signal: AbortSignal.timeout(timeout),
+      const result = await fetchHtmlWithFallback({
+        originalUrl: url,
+        normalizedUrl,
+        timeoutMs: timeout,
+        allowHttpFallback: !userProvidedScheme,
       });
+      html = result.html;
     } catch (fetchError: any) {
       if (fetchError.name === "TimeoutError" || fetchError.code === 23) {
         const message = isRailway
@@ -73,17 +157,12 @@ export async function POST(request: NextRequest) {
           : "Website timeout (7s limit). This site loads too slowly for free Vercel hosting. The app is also deployed on Railway with longer timeouts - check your Railway URL.";
         throw new Error(message);
       }
+
+      // Improve actionable diagnostics for undici/node fetch() failures
+      const info = describeFetchError(fetchError);
+      console.error("Fetch failed diagnostics:", info);
+
       throw fetchError;
-    }
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${response.statusText}`);
-    }
-
-    const html = await response.text();
-
-    if (!html || html.length === 0) {
-      throw new Error("Page has no content");
     }
 
     // Dynamically import JSDOM to avoid ESM/CommonJS conflicts
@@ -167,9 +246,9 @@ export async function POST(request: NextRequest) {
       errorMessage = error.message;
 
       // Check for specific error types
-      if (error.message.includes("fetch")) {
+      if (error.message.includes("fetch") || error.message.includes("Fetch failed")) {
         errorDetails =
-          "Network error occurred. The website may be blocking automated access or is not accessible.";
+          "Network error occurred. The website may be blocking automated access, rejecting Railway IPs, or failing TLS/DNS. Try another page on the same site, or test with a simple URL like https://example.com to confirm the service is working.";
       } else if (error.message.includes("timeout")) {
         errorDetails =
           "The request took too long. Try again or check if the URL is accessible.";

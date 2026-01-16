@@ -71,18 +71,24 @@ export async function POST(request: NextRequest) {
 
     const { window } = dom;
 
-    // Load axe-core from node_modules
-    const axePath = path.join(
-      process.cwd(),
-      "node_modules",
-      "axe-core",
-      "axe.min.js"
-    );
-    const axeSource = fs.readFileSync(axePath, "utf8");
+
+    // Import axe-core source directly (works in serverless)
+    let axeSource;
+    try {
+      axeSource = (await import("axe-core/axe.min.js?raw")).default;
+    } catch (importError) {
+      console.error("Failed to import axe-core:", importError);
+      throw new Error("axe-core could not be loaded. Ensure axe-core is installed and supported by your deployment platform.");
+    }
 
     // Inject axe-core into the window
-    const script = new window.Function(axeSource);
-    script.call(window);
+    try {
+      const script = new window.Function(axeSource);
+      script.call(window);
+    } catch (injectError) {
+      console.error("Failed to inject axe-core:", injectError);
+      throw new Error("Failed to inject axe-core into JSDOM window.");
+    }
 
     // Verify axe is loaded
     if (typeof (window as any).axe === "undefined") {

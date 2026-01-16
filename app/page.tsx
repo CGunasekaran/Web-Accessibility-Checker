@@ -39,7 +39,15 @@ export default function Home() {
     }
 
     try {
-      const response = await fetch("/api/analyze", {
+      // Use Netlify function endpoint if available
+      let endpoint = "/api/analyze";
+      if (
+        typeof window !== "undefined" &&
+        window.location.hostname.endsWith("netlify.app")
+      ) {
+        endpoint = "/.netlify/functions/analyze";
+      }
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),

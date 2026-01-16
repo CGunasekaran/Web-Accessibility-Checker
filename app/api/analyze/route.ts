@@ -72,13 +72,15 @@ export async function POST(request: NextRequest) {
     const { window } = dom;
 
 
-    // Import axe-core source directly (works in serverless)
+
+    // Load axe-core from local lib directory for serverless compatibility
     let axeSource;
     try {
-      axeSource = (await import("axe-core/axe.min.js?raw")).default;
-    } catch (importError) {
-      console.error("Failed to import axe-core:", importError);
-      throw new Error("axe-core could not be loaded. Ensure axe-core is installed and supported by your deployment platform.");
+      const axePath = path.join(process.cwd(), "lib", "axe.min.js");
+      axeSource = fs.readFileSync(axePath, "utf8");
+    } catch (readError) {
+      console.error("Failed to read axe.min.js from lib directory:", readError);
+      throw new Error("axe-core could not be loaded from lib/axe.min.js. Ensure the file exists and is accessible.");
     }
 
     // Inject axe-core into the window

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
-import { Agent, setGlobalDispatcher } from "undici";
+import { Agent, fetch as undiciFetch, setGlobalDispatcher } from "undici";
 
 // Set max duration for Vercel serverless function (10s for free Hobby tier)
 export const maxDuration = 10;
@@ -85,7 +85,7 @@ async function fetchHtmlWithFallback(options: {
     // 2 attempts per URL for transient network failures
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const response = await fetch(attemptUrl, {
+        const response = await undiciFetch(attemptUrl, {
           headers,
           redirect: "follow",
           cache: "no-store",

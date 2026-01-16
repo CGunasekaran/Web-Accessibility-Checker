@@ -17,12 +17,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`Fetching URL: ${url}`);
+    // Normalize URL (allow users to enter without protocol)
+    const normalizedUrl = url.startsWith("http://") || url.startsWith("https://")
+      ? url
+      : `https://${url}`;
+
+    // Ensure URL is syntactically valid
+    try {
+      new URL(normalizedUrl);
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid URL provided" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`Fetching URL: ${normalizedUrl}`);
 
     // Detect platform - Railway has longer timeouts
     const isRailway =
       process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
-    const timeout = isRailway ? 45000 : 7000; // 45s on Railway, 7s on Vercel
+
+    // Allow overriding via env var (useful for Railway)
+    const timeoutOverride = Number(process.env.FETCH_TIMEOUT_MS);
+    const timeout = Number.isFinite(timeoutOverride)
+      ? timeoutOverride
+      : isRailway
+        ? 90000
+        : 7000; // 90s on Railway by default, 7s on Vercel
 
     console.log(
       `Platform: ${isRailway ? "Railway" : "Vercel"}, Timeout: ${timeout}ms`
@@ -31,7 +53,7 @@ export async function POST(request: NextRequest) {
     // Fetch the HTML content - single attempt optimized for platform
     let response;
     try {
-      response = await fetch(url, {
+      response = await fetch(normalizedUrl, {
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -40,12 +62,14 @@ export async function POST(request: NextRequest) {
           "Accept-Language": "en-US,en;q=0.9",
           "Cache-Control": "no-cache",
         },
+        redirect: "follow",
+        cache: "no-store",
         signal: AbortSignal.timeout(timeout),
       });
     } catch (fetchError: any) {
       if (fetchError.name === "TimeoutError" || fetchError.code === 23) {
         const message = isRailway
-          ? "Website timeout (45s). This site is extremely slow or unresponsive. Try a different page or site."
+          ? "Website timeout. This site is extremely slow/unresponsive, or blocking server-side requests. Try a different page or set FETCH_TIMEOUT_MS on Railway to increase the limit."
           : "Website timeout (7s limit). This site loads too slowly for free Vercel hosting. The app is also deployed on Railway with longer timeouts - check your Railway URL.";
         throw new Error(message);
       }

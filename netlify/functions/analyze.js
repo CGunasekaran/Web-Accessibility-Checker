@@ -19,8 +19,8 @@ exports.handler = async function (event, context) {
       };
     }
 
-    // Netlify free tier: 10s timeout
-    const timeout = 9000;
+    // Keep under the Netlify function hard timeout (~10s on free tier)
+    const timeout = 9500;
     let response;
     try {
       response = await fetch(url, {
@@ -39,7 +39,7 @@ exports.handler = async function (event, context) {
         statusCode: 500,
         body: JSON.stringify({
           error:
-            "Website timeout (9s limit). This site loads too slowly for Netlify free hosting.",
+            "Website timeout. This site loads too slowly for the current hosting timeout.",
         }),
       };
     }
@@ -76,11 +76,11 @@ exports.handler = async function (event, context) {
       };
     }
 
-    // Create a DOM using JSDOM
+    // Create a DOM using JSDOM. Avoid loading external subresources (CSS/JS/images),
+    // which can easily exceed serverless time limits.
     const dom = new JSDOM(html, {
       url: url,
       runScripts: "outside-only",
-      resources: "usable",
     });
     const { window } = dom;
 

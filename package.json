@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@axe-core/puppeteer": "^4.11.0",
+    "@exodus/bytes": "^1.8.0",
     "@monaco-editor/react": "^4.7.0",
     "axe-core": "^4.11.0",
+    "html-encoding-sniffer": "^6.0.0",
     "html2canvas": "^1.4.1",
     "jsdom": "^27.4.0",
     "monaco-editor": "^0.55.1",

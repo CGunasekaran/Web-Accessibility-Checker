@@ -64,7 +64,11 @@ async function analyzeWithPuppeteer(targetUrl: string, timeoutMs: number) {
   const browser = await puppeteer.launch({
     headless: true,
     ...(executablePath ? { executablePath } : {}),
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+    ],
   });
 
   try {
@@ -184,7 +188,11 @@ async function fetchHtmlWithFallback(options: {
 }
 
 export async function POST(request: NextRequest) {
-  let fetchDiagnostics: ReturnType<typeof describeFetchError> | null = null;
+  let fetchDiagnostics:
+    | (ReturnType<typeof describeFetchError> & {
+        puppeteer?: ReturnType<typeof describeFetchError>;
+      })
+    | null = null;
 
   try {
     const { url } = await request.json();
@@ -253,6 +261,9 @@ export async function POST(request: NextRequest) {
         fetchError?.code === 23 ||
         fetchError?.cause?.code === "ETIMEDOUT";
 
+      // Capture diagnostics for both timeout and non-timeout failures.
+      fetchDiagnostics = describeFetchError(fetchError);
+
       // On Railway, fall back to a headless browser fetch/scan even on timeouts.
       // Some sites hang or block plain server-side HTTP clients but load in Chromium.
       if (isRailway && isTimeoutError) {
@@ -263,10 +274,9 @@ export async function POST(request: NextRequest) {
             timestamp: new Date().toISOString(),
           });
         } catch (puppeteerError) {
-          console.error(
-            "Puppeteer fallback failed:",
-            describeFetchError(puppeteerError)
-          );
+          const puppeteerInfo = describeFetchError(puppeteerError);
+          fetchDiagnostics.puppeteer = puppeteerInfo;
+          console.error("Puppeteer fallback failed:", puppeteerInfo);
         }
       }
 
@@ -278,9 +288,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Improve actionable diagnostics for undici/node fetch() failures
-      const info = describeFetchError(fetchError);
-      fetchDiagnostics = info;
-      console.error("Fetch failed diagnostics:", info);
+      console.error("Fetch failed diagnostics:", fetchDiagnostics);
 
       // On Railway, fall back to a headless browser fetch/scan. Some sites block or hang on
       // plain server-side HTTP clients, but load fine in Chromium.
@@ -292,7 +300,11 @@ export async function POST(request: NextRequest) {
             timestamp: new Date().toISOString(),
           });
         } catch (puppeteerError) {
-          console.error("Puppeteer fallback failed:", describeFetchError(puppeteerError));
+          const puppeteerInfo = describeFetchError(puppeteerError);
+          if (fetchDiagnostics) {
+            fetchDiagnostics.puppeteer = puppeteerInfo;
+          }
+          console.error("Puppeteer fallback failed:", puppeteerInfo);
         }
       }
 
